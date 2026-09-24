@@ -1,5 +1,12 @@
 # configuração do provider
 terraform {
+  backend "s3" {
+    bucket         = "nexus-devops-tfstate-732169941009"
+    key            = "infra-aws/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-locks"
+    encrypt        = true
+  }
   required_providers {
     aws = {
       source  = "hashicorp/aws"
@@ -161,7 +168,8 @@ resource "aws_db_instance" "main" {
   instance_class         = "db.t4g.micro"
   engine                 = "postgres"
   username               = "payment_app"
-  password               = "troque-esta-senha"
+  manage_master_user_password = true
+  apply_immediately           = true
   allocated_storage      = 20
   db_subnet_group_name   = aws_db_subnet_group.main.name
   vpc_security_group_ids = [aws_security_group.rds.id]

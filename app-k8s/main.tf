@@ -1,4 +1,11 @@
 terraform {
+  backend "s3" {
+    bucket         = "nexus-devops-tfstate-732169941009"
+    key            = "app-k8s/terraform.tfstate"
+    region         = "us-east-1"
+    dynamodb_table = "terraform-locks"
+    encrypt        = true
+  }
   required_providers {
     kubernetes = {
       source  = "hashicorp/kubernetes"
