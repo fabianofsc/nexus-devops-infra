@@ -1,0 +1,48 @@
+name: Infra
+
+on:
+  pull_request:
+    paths: ["app-k8s/**"]
+  push:
+    branches: [main]
+    paths: ["app-k8s/**"]
+
+jobs:
+  plan:
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_INFRA_ROLE_ARN }}
+          aws-region: us-east-1
+      - run: terraform init
+        working-directory: app-k8s
+      - run: terraform plan
+        working-directory: app-k8s
+
+  apply:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    environment: infra-apply   # com required reviewer configurado no GitHub
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: hashicorp/setup-terraform@v3
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_INFRA_ROLE_ARN }}
+          aws-region: us-east-1
+      - run: terraform init
+        working-directory: app-k8s
+      - run: terraform plan -out=tfplan
+        working-directory: app-k8s
+      - run: terraform apply tfplan
+        working-directory: app-k8s

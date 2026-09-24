@@ -18,9 +18,13 @@ terraform {
   }
 }
 
+data "aws_eks_cluster" "main" { name = "nexus-k8s-aula" }
+data "aws_eks_cluster_auth" "main" { name = "nexus-k8s-aula" }
+
 provider "kubernetes" {
-  config_path    = "~/.kube/config"
-  config_context = "nexus-k8s-aula"
+  host                   = data.aws_eks_cluster.main.endpoint
+  cluster_ca_certificate = base64decode(data.aws_eks_cluster.main.certificate_authority[0].data)
+  token                  = data.aws_eks_cluster_auth.main.token
 }
 
 provider "aws" {
@@ -31,13 +35,22 @@ data "aws_db_instance" "main" {
   db_instance_identifier = "nexus-payment-db"
 }
 
+data "aws_secretsmanager_secret_version" "rds_master" {
+  secret_id = data.aws_db_instance.main.master_user_secret[0].secret_arn
+}
+
+locals {
+  rds_username = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["username"]
+  rds_password = jsondecode(data.aws_secretsmanager_secret_version.rds_master.secret_string)["password"]
+}
+
 resource "kubernetes_secret_v1" "payment_db" {
   metadata {
     name = "payment-db-secret"
   }
   data = {
-    username = "payment_app"
-    password = "troque-esta-senha"
+    username = local.rds_username
+    password = local.rds_password
   }
   type = "Opaque"
 }
@@ -176,8 +189,8 @@ resource "kubernetes_secret_v1" "dummypay_db" {
     name = "dummypay-db-secret"
   }
   data = {
-    username = "payment_app"
-    password = "troque-esta-senha"
+    username = local.rds_username
+    password = local.rds_password
   }
   type = "Opaque"
 }
@@ -296,6 +309,65 @@ resource "kubernetes_service_v1" "dummypay" {
   }
   spec {
     selector = { app = "dummypay" }
+    port {
+      port        = 8080
+      target_port = 8080
+    }
+  }
+}
+
+# notification
+resource "kubernetes_secret_v1" "notification_db" {
+  metadata {
+    name = "notification-db-secret"
+  }
+  data = {
+    database-url = "postgres://${local.rds_username}:${local.rds_password}@${data.aws_db_instance.main.address}:5432/notification_db?sslmode=require"
+  }
+}
+
+resource "kubernetes_deployment_v1" "notification" {
+  metadata {
+    name   = "notification"
+    labels = { app = "notification" }
+  }
+  spec {
+    replicas = 1
+    selector {
+      match_labels = { app = "notification" }
+    }
+    template {
+      metadata {
+        labels = { app = "notification" }
+      }
+      spec {
+        container {
+          name  = "notification"
+          image = "fabianofsc/notification-service:v1.0-notification"
+          port {
+            container_port = 8080
+          }
+          env {
+            name = "DATABASE_URL"
+            value_from {
+              secret_key_ref {
+                name = kubernetes_secret_v1.notification_db.metadata[0].name
+                key  = "database-url"
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+}
+
+resource "kubernetes_service_v1" "notification" {
+  metadata {
+    name = "notification"
+  }
+  spec {
+    selector = { app = "notification" }
     port {
       port        = 8080
       target_port = 8080
