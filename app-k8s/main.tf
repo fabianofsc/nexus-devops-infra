@@ -189,8 +189,9 @@ resource "kubernetes_secret_v1" "dummypay_db" {
     name = "dummypay-db-secret"
   }
   data = {
-    username = local.rds_username
-    password = local.rds_password
+    username     = local.rds_username
+    password     = local.rds_password
+    database-url = "postgres://${local.rds_username}:${urlencode(local.rds_password)}@${data.aws_db_instance.main.address}:5432/dummypay?sslmode=require"
   }
   type = "Opaque"
 }
@@ -251,8 +252,13 @@ resource "kubernetes_deployment_v1" "dummypay" {
             }
           }
           env {
-            name  = "DUMMYPAY_DATABASE_URL"
-            value = "postgres://$(DB_USER):$(DB_PASSWORD)@${data.aws_db_instance.main.address}:5432/dummypay?sslmode=require"
+            name = "DUMMYPAY_DATABASE_URL"
+            value_from {
+              secret_key_ref {
+                name = kubernetes_secret_v1.dummypay_db.metadata[0].name
+                key  = "database-url"
+              }
+            }
           }
           env {
             name = "DUMMYPAY_ACCOUNT_KEY_ID"
@@ -322,7 +328,7 @@ resource "kubernetes_secret_v1" "notification_db" {
     name = "notification-db-secret"
   }
   data = {
-    database-url = "postgres://${local.rds_username}:${local.rds_password}@${data.aws_db_instance.main.address}:5432/notification_db?sslmode=require"
+    database-url = "postgres://${local.rds_username}:${urlencode(local.rds_password)}@${data.aws_db_instance.main.address}:5432/notification_db?sslmode=require"
   }
 }
 
