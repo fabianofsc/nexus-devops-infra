@@ -1,0 +1,6 @@
+# Toda mudanca exige revisao do dono do repositorio
+*                @fabianofsc
+/.github/        @fabianofsc
+/app-k8s/       @fabianofsc
+/infra-aws/     @fabianofsc
+/bootstrap/     @fabianofsc
